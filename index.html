@@ -327,41 +327,41 @@ const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar' };
 
 // ── GOOGLE SHEETS FETCH ───────────────────────────────────────────────────────
 async function fetchSheet(sheetName) {
-  // Google Sheets gviz endpoint — works cross-origin for public sheets
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&headers=0`;
-  
+  console.log('[KPI] Fetching:', url);
+
   let resp;
-  try {
-    resp = await fetch(url);
-  } catch(e) {
-    throw new Error(`Impossibile raggiungere Google Sheets. Verifica la connessione internet. (${e.message})`);
-  }
-  if (!resp.ok) throw new Error(`Errore HTTP ${resp.status} per foglio "${sheetName}"`);
-  
+  try { resp = await fetch(url); }
+  catch(e) { throw new Error(`Fetch fallito: ${e.message}`); }
+
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} per "${sheetName}"`);
+
   const raw = await resp.text();
-  if (!raw || raw.trim().length === 0) throw new Error(`Foglio "${sheetName}" vuoto o non trovato`);
+  console.log('[KPI] Response preview:', raw.substring(0, 150));
 
-  // Strip Google's JS wrapper: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
-  const match = raw.match(/google\.visualization\.Query\.setResponse\((\{.*\})\)/s);
-  if (!match) throw new Error(`Formato risposta non valido per foglio "${sheetName}"`);
-  
+  if (!raw || !raw.trim()) throw new Error(`Risposta vuota per "${sheetName}"`);
+  if (raw.includes('accounts.google.com')) throw new Error(`Il file richiede login Google. Rendilo pubblico.`);
+
+  const match = raw.match(/setResponse\((\{[\s\S]*\})\)/);
+  if (!match) throw new Error(`Formato non riconosciuto: ${raw.substring(0, 80)}`);
+
   let json;
-  try { json = JSON.parse(match[1]); } 
-  catch(e) { throw new Error(`Errore parsing JSON foglio "${sheetName}": ${e.message}`); }
+  try { json = JSON.parse(match[1]); }
+  catch(e) { throw new Error(`JSON non valido: ${e.message}`); }
 
-  if (!json.table) throw new Error(`Nessuna tabella nel foglio "${sheetName}"`);
+  if (json.status === 'error') throw new Error(`GSheets errore: ${(json.errors||[]).map(e=>e.message).join('; ')}`);
+  if (!json.table) throw new Error(`Nessuna tabella in "${sheetName}"`);
 
-  // Build 2D array: first row = column labels
   const cols = json.table.cols.map(c => (c.label || '').trim());
   const rows = [cols];
   for (const row of (json.table.rows || [])) {
     rows.push((row.c || []).map(cell => {
       if (!cell || cell.v === null || cell.v === undefined) return '';
-      // Prefer formatted value (f) for numbers/dates, fallback to raw value (v)
-      if (cell.f !== undefined && cell.f !== null) return String(cell.f);
+      if (cell.f !== null && cell.f !== undefined) return String(cell.f);
       return String(cell.v);
     }));
   }
+  console.log(`[KPI] Sheet "${sheetName}": ${rows.length} rows, cols: ${cols.slice(0,6).join(', ')}`);
   return rows;
 }
 
