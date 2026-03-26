@@ -327,20 +327,39 @@ const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar' };
 
 // ── GOOGLE SHEETS FETCH ───────────────────────────────────────────────────────
 async function fetchSheet(sheetName) {
-  // Use gviz/tq JSON endpoint — CORS-safe for public sheets
+  // Google Sheets gviz endpoint — works cross-origin for public sheets
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&headers=0`;
-  const resp = await fetch(url, { mode: 'cors' });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status} per foglio ${sheetName}`);
+  
+  let resp;
+  try {
+    resp = await fetch(url);
+  } catch(e) {
+    throw new Error(`Impossibile raggiungere Google Sheets. Verifica la connessione internet. (${e.message})`);
+  }
+  if (!resp.ok) throw new Error(`Errore HTTP ${resp.status} per foglio "${sheetName}"`);
+  
   const raw = await resp.text();
-  // Google wraps response in: google.visualization.Query.setResponse({...})
-  const json = JSON.parse(raw.replace(/^[^{]+/, '').replace(/[^}]+$/, ''));
-  // Convert gviz table format to 2D array of strings
-  const cols = json.table.cols.map(c => c.label || '');
-  const rows = [cols]; // header row
-  for (const row of json.table.rows) {
+  if (!raw || raw.trim().length === 0) throw new Error(`Foglio "${sheetName}" vuoto o non trovato`);
+
+  // Strip Google's JS wrapper: /*O_o*/\ngoogle.visualization.Query.setResponse({...});
+  const match = raw.match(/google\.visualization\.Query\.setResponse\((\{.*\})\)/s);
+  if (!match) throw new Error(`Formato risposta non valido per foglio "${sheetName}"`);
+  
+  let json;
+  try { json = JSON.parse(match[1]); } 
+  catch(e) { throw new Error(`Errore parsing JSON foglio "${sheetName}": ${e.message}`); }
+
+  if (!json.table) throw new Error(`Nessuna tabella nel foglio "${sheetName}"`);
+
+  // Build 2D array: first row = column labels
+  const cols = json.table.cols.map(c => (c.label || '').trim());
+  const rows = [cols];
+  for (const row of (json.table.rows || [])) {
     rows.push((row.c || []).map(cell => {
       if (!cell || cell.v === null || cell.v === undefined) return '';
-      return cell.f !== undefined ? cell.f : String(cell.v);
+      // Prefer formatted value (f) for numbers/dates, fallback to raw value (v)
+      if (cell.f !== undefined && cell.f !== null) return String(cell.f);
+      return String(cell.v);
     }));
   }
   return rows;
