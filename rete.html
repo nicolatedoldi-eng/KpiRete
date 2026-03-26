@@ -158,6 +158,13 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1-t9ohLfwkecM
 const SHEET_NAMES = ['GENNAIO', 'FEBBRAIO', 'MARZO', 'APRILE'];
 const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar', APRILE:'Apr', MAGGIO:'Mag', GIUGNO:'Giu', LUGLIO:'Lug', AGOSTO:'Ago', SETTEMBRE:'Set', OTTOBRE:'Ott', NOVEMBRE:'Nov', DICEMBRE:'Dic' };
 
+// Consulenti già presenti nella rete prima del periodo tracciato
+// (appaiono per la prima volta nei dati ma non sono nuovi entrati)
+const ALREADY_IN_RETE = [
+  'Giuseppe Cesario',
+  'Harshdeep Singh',
+];
+
 let RAW = []; // all records
 let charts = {};
 
@@ -259,13 +266,15 @@ function analyze() {
     }
   });
 
-  // New entrants: appear for first time in a month
+  // New entrants: appear for first time in a month (excluding known pre-existing consultants)
   const newEntrants = [];
   months.forEach((m, idx) => {
     if (idx === 0) return;
     const prevMonths = months.slice(0, idx);
     byMonth[m].forEach(r => {
       const name = cleanName(r.Consulente);
+      // Skip if already known to be pre-existing
+      if (ALREADY_IN_RETE.some(n => n.toLowerCase() === name.toLowerCase())) return;
       const wasBefore = prevMonths.some(pm => RAW.some(pr => cleanName(pr.Consulente) === name && pr.Mese === pm));
       if (!wasBefore) newEntrants.push({ nome: name, profilo: r.Profilo, mese: m });
     });
