@@ -337,93 +337,116 @@ async function fetchSheet(sheetName) {
   if (!resp.ok) throw new Error(`HTTP ${resp.status} per "${sheetName}"`);
 
   const raw = await resp.text();
-  console.log('[KPI] Response preview:', raw.substring(0, 150));
-
   if (!raw || !raw.trim()) throw new Error(`Risposta vuota per "${sheetName}"`);
-  if (raw.includes('accounts.google.com')) throw new Error(`Il file richiede login Google. Rendilo pubblico.`);
+  if (raw.includes('accounts.google.com')) throw new Error('Il file richiede login. Rendilo pubblico su Google Sheets.');
 
   const match = raw.match(/setResponse\((\{[\s\S]*\})\)/);
-  if (!match) throw new Error(`Formato non riconosciuto: ${raw.substring(0, 80)}`);
+  if (!match) throw new Error(`Formato risposta non riconosciuto: ${raw.substring(0, 80)}`);
 
   let json;
   try { json = JSON.parse(match[1]); }
   catch(e) { throw new Error(`JSON non valido: ${e.message}`); }
 
   if (json.status === 'error') throw new Error(`GSheets errore: ${(json.errors||[]).map(e=>e.message).join('; ')}`);
-  if (!json.table) throw new Error(`Nessuna tabella in "${sheetName}"`);
+  if (!json.table) throw new Error(`Nessuna tabella trovata in "${sheetName}"`);
 
-  const cols = json.table.cols.map(c => (c.label || '').trim());
-  const rows = [cols];
+  // gviz returns labels empty when headers=0 — build 2D array using raw values
+  const rows = [];
   for (const row of (json.table.rows || [])) {
     rows.push((row.c || []).map(cell => {
       if (!cell || cell.v === null || cell.v === undefined) return '';
+      // Use formatted value for display (handles € formatting), fallback to raw
       if (cell.f !== null && cell.f !== undefined) return String(cell.f);
       return String(cell.v);
     }));
   }
-  console.log(`[KPI] Sheet "${sheetName}": ${rows.length} rows, cols: ${cols.slice(0,6).join(', ')}`);
+  console.log(`[KPI] Sheet "${sheetName}": ${rows.length} rows`);
+  if (rows.length > 0) console.log(`[KPI] First row sample:`, rows[0].slice(0,5));
+  if (rows.length > 1) console.log(`[KPI] Second row sample:`, rows[1].slice(0,8));
   return rows;
 }
 
 function parseSheetRows(rows, month) {
-  // Find header row (contains 'Consulente')
+  // Row 0 = group headers (RACCOLTA, RINNOVI etc), Row 1 = column headers, data starts Row 2
+  // Find the row that has 'Consulente' in first column
   let headerIdx = -1;
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
-    if (rows[i].some(c => c && c.toString().includes('onsulente'))) { headerIdx = i; break; }
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    if (rows[i][0] && rows[i][0].toString().trim() === 'Consulente') {
+      headerIdx = i;
+      break;
+    }
   }
-  if (headerIdx < 0) return [];
-  const headers = rows[headerIdx].map(h => h ? h.trim() : '');
+  if (headerIdx < 0) {
+    console.warn(`[KPI] Header row not found in ${month}, rows[0]:`, rows[0]);
+    return [];
+  }
 
-  const col = name => headers.indexOf(name);
-  const iC  = 0, iProfilo = 1;
-  const iParc   = col('Parcella');
-  const iParcAP = col('Parcella AP');
-  const iInc    = col('Incassato');
-  const iRacc   = col('TOTALE RACCOLTA');
-  const iRaccEst= col('Raccolta esterna');
-  const iRaccInt= col('Raccolta interna');
-  const iNCI    = col('Nuovi clienti interni');
-  const iInteg  = col('integrazione');
-  const iNCE    = col('Nuovi clienti esterni');
-  const iSvilEst= col('TOTALE SVILUPPO ESTERNI');
-  const iSvilTot= col('TOTALE SVILUPPO');
+  const headers = rows[headerIdx].map(h => (h || '').toString().trim());
+  console.log(`[KPI] Headers for ${month}:`, headers.slice(0, 16));
 
-  const profili = ['CFA Junior','CFA Senior','CFA Private'];
+  // Column index helpers
+  const ci = name => headers.indexOf(name);
+  const iParc    = ci('Parcella');
+  const iParcAP  = ci('Parcella AP');
+  const iInc     = ci('Incassato');
+  const iRacc    = ci('TOTALE RACCOLTA');
+  const iRaccEst = ci('Raccolta esterna');
+  const iRaccInt = ci('Raccolta interna');
+  const iNCI     = ci('Nuovi clienti interni');
+  const iInteg   = ci('integrazione');
+  const iNCE     = ci('Nuovi clienti esterni');
+  const iSvilEst = ci('TOTALE SVILUPPO ESTERNI');
+  const iSvilTot = ci('TOTALE SVILUPPO');
+
+  const profili = ['CFA Junior', 'CFA Senior', 'CFA Private'];
   const skip = /junior|senior|private|totale|media|budget|target|benchmark|actual/i;
-  const n = v => { const x = parseFloat((v||'').toString().replace(',','.')); return isNaN(x) ? 0 : x; };
+
+  // Parse € formatted numbers like "€ 1.234,56" or "-€ 500,00"
+  const n = v => {
+    if (!v || v === '' || v === '#DIV/0!') return 0;
+    const s = v.toString()
+      .replace(/€/g, '')
+      .replace(/\./g, '')   // remove thousands separator
+      .replace(',', '.')    // decimal comma to dot
+      .replace(/[^\d.\-]/g, '')
+      .trim();
+    const x = parseFloat(s);
+    return isNaN(x) ? 0 : x;
+  };
 
   const result = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i];
-    const nome = (row[iC] || '').trim();
-    const profilo = (row[iProfilo] || '').trim();
+    const nome = (row[0] || '').toString().trim();
+    const profilo = (row[1] || '').toString().trim();
     if (!nome || !profili.includes(profilo) || skip.test(nome)) continue;
 
-    const parc   = n(row[iParc]);
-    const parcAP = n(row[iParcAP]);
+    const parc   = iParc   >= 0 ? n(row[iParc])   : 0;
+    const parcAP = iParcAP >= 0 ? n(row[iParcAP]) : 0;
     const sEst   = iSvilEst >= 0 ? n(row[iSvilEst]) : 0;
     const sTot   = iSvilTot >= 0 ? n(row[iSvilTot]) : 0;
-    const sInt   = iNCI >= 0 ? n(row[iNCI]) : 0;
+    const sInt   = iNCI     >= 0 ? n(row[iNCI])     : 0;
 
     result.push({
       Consulente: nome,
       Profilo: profilo,
       Mese: month,
-      Parcella: parc,
+      Parcella:    parc,
       'Parcella AP': parcAP,
-      Incassato: n(row[iInc]),
+      Incassato:   iInc     >= 0 ? n(row[iInc])     : 0,
       perc_rinnovi: parcAP !== 0 ? Math.round(parc / parcAP * 10000) / 10000 : -1,
       svil_interni: sInt,
       svil_esterni: sEst,
-      svil_totale: sTot,
-      'TOTALE RACCOLTA': n(row[iRacc]),
-      'Raccolta esterna': iRaccEst >= 0 ? n(row[iRaccEst]) : 0,
-      'Raccolta interna': iRaccInt >= 0 ? n(row[iRaccInt]) : 0,
+      svil_totale:  sTot,
+      'TOTALE RACCOLTA':    iRacc    >= 0 ? n(row[iRacc])    : 0,
+      'Raccolta esterna':   iRaccEst >= 0 ? n(row[iRaccEst]) : 0,
+      'Raccolta interna':   iRaccInt >= 0 ? n(row[iRaccInt]) : 0,
       'Nuovi clienti interni': sInt,
-      integrazione: iInteg >= 0 ? n(row[iInteg]) : 0,
-      'Nuovi clienti esterni': iNCE >= 0 ? n(row[iNCE]) : 0,
+      integrazione:         iInteg   >= 0 ? n(row[iInteg])   : 0,
+      'Nuovi clienti esterni': iNCE  >= 0 ? n(row[iNCE])     : 0,
     });
   }
+  console.log(`[KPI] Parsed ${result.length} records for ${month}`);
   return result;
 }
 
