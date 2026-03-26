@@ -229,7 +229,7 @@ tbody td { padding: 10px 14px; font-size: 12px; white-space: nowrap; }
   <div class="logo">KPI <span>Rete</span> Consulenti</div>
   <div class="header-right">
     <div class="last-sync" id="lastSync"></div>
-    <div class="period-tag" id="periodTag">Gen — Mar</div>
+    <div class="period-tag" id="periodTag">Gen — Apr</div>
     <button class="sync-btn" id="syncBtn" onclick="syncData()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline>
@@ -295,16 +295,16 @@ tbody td { padding: 10px 14px; font-size: 12px; white-space: nowrap; }
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────────────
 const SHEET_ID = '1jXQWJIjgV0mmFGL3wxp07XZKkpty3CJWa2d_QuHt4pY';
-const SHEET_NAMES = ['GENNAIO', 'FEBBRAIO', 'MARZO'];
+const SHEET_NAMES = ['GENNAIO', 'FEBBRAIO', 'MARZO', 'APRILE'];
 
 // ── TARGETS ──────────────────────────────────────────────────────────────────
 const TARGETS = { 'CFA Junior': 0.50, 'CFA Senior': 0.75, 'CFA Private': 0.95, 'Rete': 0.85 };
 
 const SVIL_EST_TARGET = {
   totale: 62818,
-  'CFA Junior':  { categoria: 6282,  perConsulente: { GENNAIO: 330.63, FEBBRAIO: 232.66, MARZO: 232.66 } },
-  'CFA Senior':  { categoria: 28696, perConsulente: { GENNAIO: 1191.39, FEBBRAIO: 1191.39, MARZO: 1191.39 } },
-  'CFA Private': { categoria: 21987, perConsulente: { GENNAIO: 2442.96, FEBBRAIO: 2442.96, MARZO: 2442.96 } },
+  'CFA Junior':  { categoria: 6282,  perConsulente: { GENNAIO: 330.63, FEBBRAIO: 232.66, MARZO: 232.66, APRILE: 232.66 } },
+  'CFA Senior':  { categoria: 28696, perConsulente: { GENNAIO: 1191.39, FEBBRAIO: 1191.39, MARZO: 1191.39, APRILE: 1191.39 } },
+  'CFA Private': { categoria: 21987, perConsulente: { GENNAIO: 2442.96, FEBBRAIO: 2442.96, MARZO: 2442.96, APRILE: 2442.96 } },
 };
 
 function targetPerCons(profilo, mesi) {
@@ -317,13 +317,13 @@ function targetPerCons(profilo, mesi) {
 let RAW = [];
 let data = [];
 let filteredData = [];
-let selectedMonths = ['GENNAIO','FEBBRAIO','MARZO'];
+let selectedMonths = ['GENNAIO','FEBBRAIO','MARZO','APRILE'];
 let sortCol = null, sortDir = 1, page = 1;
 const PER_PAGE = 20;
 let charts = {};
 
-const MONTHS_ALL = ['GENNAIO','FEBBRAIO','MARZO'];
-const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar' };
+const MONTHS_ALL = ['GENNAIO','FEBBRAIO','MARZO','APRILE'];
+const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar', APRILE:'Apr' };
 
 // ── GOOGLE SHEETS FETCH ───────────────────────────────────────────────────────
 async function fetchSheet(sheetName) {
