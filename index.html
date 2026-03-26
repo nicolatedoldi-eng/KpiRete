@@ -327,8 +327,9 @@ const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar' };
 
 // ── GOOGLE SHEETS FETCH ───────────────────────────────────────────────────────
 async function fetchSheet(sheetName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&headers=0`;
-  console.log('[KPI] Fetching:', url);
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1-t9ohLfwkecMoU73JbtvusFAqsbmm99kxIxaRI9XZYjmOsTRISxqFWf1lNpjHFJD/exec';
+  const url = `${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`;
+  console.log('[KPI] Fetching via Apps Script:', url);
 
   let resp;
   try { resp = await fetch(url); }
@@ -336,39 +337,23 @@ async function fetchSheet(sheetName) {
 
   if (!resp.ok) throw new Error(`HTTP ${resp.status} per "${sheetName}"`);
 
-  const raw = await resp.text();
-  if (!raw || !raw.trim()) throw new Error(`Risposta vuota per "${sheetName}"`);
-  if (raw.includes('accounts.google.com')) throw new Error('Il file richiede login. Rendilo pubblico su Google Sheets.');
-
-  const match = raw.match(/setResponse\((\{[\s\S]*\})\)/);
-  if (!match) throw new Error(`Formato risposta non riconosciuto: ${raw.substring(0, 80)}`);
-
-  let json;
-  try { json = JSON.parse(match[1]); }
+  let rows;
+  try { rows = await resp.json(); }
   catch(e) { throw new Error(`JSON non valido: ${e.message}`); }
 
-  if (json.status === 'error') throw new Error(`GSheets errore: ${(json.errors||[]).map(e=>e.message).join('; ')}`);
-  if (!json.table) throw new Error(`Nessuna tabella trovata in "${sheetName}"`);
-
-  // gviz returns labels empty when headers=0 — build 2D array using raw values
-  const rows = [];
-  for (const row of (json.table.rows || [])) {
-    rows.push((row.c || []).map(cell => {
-      if (!cell || cell.v === null || cell.v === undefined) return '';
-      // Use formatted value for display (handles € formatting), fallback to raw
-      if (cell.f !== null && cell.f !== undefined) return String(cell.f);
-      return String(cell.v);
-    }));
-  }
   console.log(`[KPI] Sheet "${sheetName}": ${rows.length} rows`);
-  if (rows.length > 0) console.log(`[KPI] First row sample:`, rows[0].slice(0,5));
-  if (rows.length > 1) console.log(`[KPI] Second row sample:`, rows[1].slice(0,8));
-  return rows;
+  if (rows.length > 0) console.log('[KPI] Row 0:', rows[0].slice(0,5));
+  if (rows.length > 1) console.log('[KPI] Row 1:', rows[1].slice(0,5));
+
+  // Convert all values to strings (Apps Script returns native JS types)
+  return rows.map(row => row.map(cell => {
+    if (cell === null || cell === undefined || cell === '') return '';
+    return String(cell);
+  }));
 }
 
 function parseSheetRows(rows, month) {
-  // Row 0 = group headers (RACCOLTA, RINNOVI etc), Row 1 = column headers, data starts Row 2
-  // Find the row that has 'Consulente' in first column
+  // Find header row with 'Consulente' in first column
   let headerIdx = -1;
   for (let i = 0; i < Math.min(rows.length, 5); i++) {
     if (rows[i][0] && rows[i][0].toString().trim() === 'Consulente') {
@@ -377,14 +362,13 @@ function parseSheetRows(rows, month) {
     }
   }
   if (headerIdx < 0) {
-    console.warn(`[KPI] Header row not found in ${month}, rows[0]:`, rows[0]);
+    console.warn(`[KPI] Header row not found in ${month}`);
     return [];
   }
 
   const headers = rows[headerIdx].map(h => (h || '').toString().trim());
   console.log(`[KPI] Headers for ${month}:`, headers.slice(0, 16));
 
-  // Column index helpers
   const ci = name => headers.indexOf(name);
   const iParc    = ci('Parcella');
   const iParcAP  = ci('Parcella AP');
@@ -401,16 +385,10 @@ function parseSheetRows(rows, month) {
   const profili = ['CFA Junior', 'CFA Senior', 'CFA Private'];
   const skip = /junior|senior|private|totale|media|budget|target|benchmark|actual/i;
 
-  // Parse € formatted numbers like "€ 1.234,56" or "-€ 500,00"
+  // Apps Script returns raw numbers as strings like "1234.56" or "-500"
   const n = v => {
-    if (!v || v === '' || v === '#DIV/0!') return 0;
-    const s = v.toString()
-      .replace(/€/g, '')
-      .replace(/\./g, '')   // remove thousands separator
-      .replace(',', '.')    // decimal comma to dot
-      .replace(/[^\d.\-]/g, '')
-      .trim();
-    const x = parseFloat(s);
+    if (!v || v === '' || v === '#DIV/0!' || v === 'NaN') return 0;
+    const x = parseFloat(v.toString().replace(/[^\d.\-]/g, ''));
     return isNaN(x) ? 0 : x;
   };
 
@@ -438,12 +416,12 @@ function parseSheetRows(rows, month) {
       svil_interni: sInt,
       svil_esterni: sEst,
       svil_totale:  sTot,
-      'TOTALE RACCOLTA':    iRacc    >= 0 ? n(row[iRacc])    : 0,
-      'Raccolta esterna':   iRaccEst >= 0 ? n(row[iRaccEst]) : 0,
-      'Raccolta interna':   iRaccInt >= 0 ? n(row[iRaccInt]) : 0,
+      'TOTALE RACCOLTA':       iRacc    >= 0 ? n(row[iRacc])    : 0,
+      'Raccolta esterna':      iRaccEst >= 0 ? n(row[iRaccEst]) : 0,
+      'Raccolta interna':      iRaccInt >= 0 ? n(row[iRaccInt]) : 0,
       'Nuovi clienti interni': sInt,
-      integrazione:         iInteg   >= 0 ? n(row[iInteg])   : 0,
-      'Nuovi clienti esterni': iNCE  >= 0 ? n(row[iNCE])     : 0,
+      integrazione:            iInteg   >= 0 ? n(row[iInteg])   : 0,
+      'Nuovi clienti esterni': iNCE     >= 0 ? n(row[iNCE])     : 0,
     });
   }
   console.log(`[KPI] Parsed ${result.length} records for ${month}`);
