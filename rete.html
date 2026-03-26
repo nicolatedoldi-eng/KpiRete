@@ -329,7 +329,7 @@ function analyze() {
     totalPerMonth[m] = base + missing;
   });
 
-  return { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, allNames, cleanName };
+  return { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, totalPerMonth, allNames, cleanName };
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
@@ -345,7 +345,7 @@ function badge(p) {
 }
 
 function renderAll() {
-  const { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, allNames, cleanName } = analyze();
+  const { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, totalPerMonth, allNames, cleanName } = analyze();
 
   // ── KPI SUMMARY ──
   const lastMonth = months[months.length - 1];
