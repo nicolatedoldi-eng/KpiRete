@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPI Rete — Crescita e Movimenti</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface2: #f0f3fa;
+  --border: #e2e7f0;
+  --border2: #d0d7e8;
+  --text: #1a1f36;
+  --text2: #4a5280;
+  --muted: #8891b0;
+  --junior: #0d9e6e;
+  --junior-bg: #e8f8f3;
+  --senior: #1a7fcb;
+  --senior-bg: #e8f2fb;
+  --private: #7c3aed;
+  --private-bg: #f0ebff;
+  --green: #0d9e6e;
+  --red: #e53e3e;
+  --orange: #dd6b20;
+  --accent: #2563eb;
+  --shadow: 0 1px 3px rgba(26,31,54,0.07), 0 4px 12px rgba(26,31,54,0.05);
+  --shadow-md: 0 4px 16px rgba(26,31,54,0.10);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Sora', sans-serif; font-size: 13px; min-height: 100vh; }
+
+/* ── LOADING ── */
+.loading-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; gap: 16px; }
+.loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.loading-error { background: #fff5f5; border: 1px solid #fed7d7; border-radius: 10px; padding: 20px 28px; text-align: center; max-width: 420px; }
+.loading-error h3 { color: var(--red); font-size: 15px; margin-bottom: 8px; }
+.loading-error p { color: var(--text2); font-size: 12px; line-height: 1.6; }
+.retry-btn { margin-top: 14px; background: var(--accent); color: #fff; border: none; padding: 8px 20px; border-radius: 7px; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+/* ── HEADER ── */
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 4px rgba(26,31,54,0.06); }
+.logo { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.logo span { color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.last-sync { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+.nav-pills { display: flex; gap: 4px; }
+.nav-pill { padding: 6px 14px; border-radius: 7px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s; }
+.nav-pill:hover { border-color: var(--accent); color: var(--accent); }
+.nav-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sync-btn { display: flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 7px; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+.sync-btn:hover { background: #1d4ed8; }
+.sync-btn:disabled { opacity: 0.6; cursor: default; }
+.sync-btn.syncing svg { animation: spin 0.8s linear infinite; }
+
+/* ── MAIN ── */
+.main { padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+.section-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+
+/* ── KPI CARDS ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.kpi-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.kpi-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.kpi-icon { font-size: 16px; opacity: 0.6; }
+.kpi-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; letter-spacing: -0.5px; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; }
+.kpi-sub { font-size: 11px; color: var(--muted); }
+
+/* ── TWO COL ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+@media (max-width: 900px) { .three-col { grid-template-columns: 1fr; } }
+
+/* ── CARDS ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+.card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 16px; }
+.chart-wrap { position: relative; height: 220px; }
+
+/* ── MOVEMENT LIST ── */
+.movement-list { display: flex; flex-direction: column; gap: 8px; }
+.movement-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 9px; background: var(--surface2); border: 1px solid var(--border); }
+.movement-name { font-weight: 600; font-size: 13px; flex: 1; }
+.movement-arrow { font-size: 16px; }
+.movement-meta { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.badge { display: inline-block; padding: 2px 9px; border-radius: 5px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge-junior { background: var(--junior-bg); color: var(--junior); }
+.badge-senior { background: var(--senior-bg); color: var(--senior); }
+.badge-private { background: var(--private-bg); color: var(--private); }
+.badge-new { background: #e8f8f3; color: #0d9e6e; }
+.badge-out { background: #fff5f5; color: #e53e3e; }
+
+/* ── CONSULENTE TABLE ── */
+.cons-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cons-table th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+.cons-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.cons-table tr:last-child td { border-bottom: none; }
+.cons-table tr:hover td { background: var(--surface2); }
+.month-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; }
+.empty-state { text-align: center; padding: 24px; color: var(--muted); font-size: 12px; }
+
+/* ── TIMELINE ── */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.timeline-row { display: flex; align-items: stretch; gap: 0; }
+.timeline-label { width: 160px; flex-shrink: 0; padding: 10px 12px; font-weight: 600; font-size: 12px; display: flex; align-items: center; border-bottom: 1px solid var(--border); }
+.timeline-months { display: flex; flex: 1; }
+.timeline-cell { flex: 1; padding: 10px 8px; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 60px; }
+.timeline-header .timeline-cell { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); background: var(--surface2); }
+.cell-junior { background: var(--junior-bg); color: var(--junior); font-weight: 600; }
+.cell-senior { background: var(--senior-bg); color: var(--senior); font-weight: 600; }
+.cell-private { background: var(--private-bg); color: var(--private); font-weight: 600; }
+.cell-absent { background: var(--surface2); color: var(--muted); }
+.cell-promoted { position: relative; }
+.cell-promoted::after { content: '↑'; position: absolute; top: 2px; right: 4px; font-size: 9px; opacity: 0.7; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Caricamento dati...</div>
+</div>
+
+<div id="appContent" style="display:none">
+
+<div class="header">
+  <div class="logo">KPI <span>Rete</span> Consulenti</div>
+  <div class="header-right">
+    <div class="last-sync" id="lastSync"></div>
+    <div class="nav-pills">
+      <a href="index.html" class="nav-pill">📊 KPI Dashboard</a>
+      <a href="rete.html" class="nav-pill active">📈 Crescita Rete</a>
+    </div>
+    <button class="sync-btn" id="syncBtn" onclick="syncData()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+      </svg>
+      Sincronizza
+    </button>
+  </div>
+</div>
+
+<div class="main" id="mainContent"></div>
+
+</div>
+
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1-t9ohLfwkecMoU73JbtvusFAqsbmm99kxIxaRI9XZYjmOsTRISxqFWf1lNpjHFJD/exec';
+const SHEET_NAMES = ['GENNAIO', 'FEBBRAIO', 'MARZO', 'APRILE'];
+const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar', APRILE:'Apr', MAGGIO:'Mag', GIUGNO:'Giu', LUGLIO:'Lug', AGOSTO:'Ago', SETTEMBRE:'Set', OTTOBRE:'Ott', NOVEMBRE:'Nov', DICEMBRE:'Dic' };
+
+let RAW = []; // all records
+let charts = {};
+
+// ── FETCH ─────────────────────────────────────────────────────────────────────
+async function fetchSheet(sheetName) {
+  const url = `${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`;
+  let resp;
+  try { resp = await fetch(url); } catch(e) { throw new Error(`Fetch fallito: ${e.message}`); }
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} per "${sheetName}"`);
+  let rows;
+  try { rows = await resp.json(); } catch(e) { throw new Error(`JSON non valido: ${e.message}`); }
+  return rows.map(row => row.map(cell => (cell === null || cell === undefined) ? '' : String(cell)));
+}
+
+function parseSheetRows(rows, month) {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    if (rows[i][0] && rows[i][0].toString().trim() === 'Consulente') { headerIdx = i; break; }
+  }
+  if (headerIdx < 0) return [];
+  const profili = ['CFA Junior', 'CFA Senior', 'CFA Private'];
+  const skip = /junior|senior|private|totale|media|budget|target|benchmark|actual/i;
+  const result = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const nome = (row[0] || '').toString().trim();
+    const profilo = (row[1] || '').toString().trim();
+    if (!nome || !profili.includes(profilo) || skip.test(nome)) continue;
+    result.push({ Consulente: nome, Profilo: profilo, Mese: month, isOut: nome.includes('❌') });
+  }
+  return result;
+}
+
+// ── SYNC ──────────────────────────────────────────────────────────────────────
+async function syncData() {
+  const btn = document.getElementById('syncBtn');
+  const lt = document.getElementById('loadingText');
+  btn.disabled = true; btn.classList.add('syncing');
+
+  try {
+    const allRows = [];
+    for (const month of SHEET_NAMES) {
+      if (lt) lt.textContent = `Caricamento ${month}...`;
+      const rows = await fetchSheet(month);
+      allRows.push(...parseSheetRows(rows, month));
+    }
+    if (!allRows.length) throw new Error('Nessun dato trovato.');
+    RAW = allRows;
+    const now = new Date();
+    document.getElementById('lastSync').textContent = `↑ ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('appContent').style.display = 'block';
+    renderAll();
+  } catch(err) {
+    document.getElementById('loadingScreen').innerHTML = `
+      <div class="loading-error">
+        <h3>Errore di caricamento</h3>
+        <p style="font-family:monospace;background:#fee;padding:8px;border-radius:4px;font-size:11px">${err.message}</p>
+        <button class="retry-btn" onclick="syncData()">Riprova</button>
+      </div>`;
+  }
+  btn.disabled = false; btn.classList.remove('syncing');
+}
+
+// ── ANALYSIS ──────────────────────────────────────────────────────────────────
+function analyze() {
+  const months = SHEET_NAMES.filter(m => RAW.some(r => r.Mese === m));
+
+  // Consulenti per mese e profilo
+  const byMonth = {};
+  months.forEach(m => {
+    byMonth[m] = RAW.filter(r => r.Mese === m);
+  });
+
+  // All unique consultants ever seen (clean name without ❌)
+  const cleanName = n => n.replace('❌','').trim();
+  const allNames = [...new Set(RAW.map(r => cleanName(r.Consulente)))];
+
+  // Build timeline: for each consultant, their profilo per month
+  const timeline = {};
+  allNames.forEach(name => {
+    timeline[name] = {};
+    months.forEach(m => {
+      const rec = RAW.find(r => cleanName(r.Consulente) === name && r.Mese === m);
+      timeline[name][m] = rec ? rec.Profilo : null;
+    });
+  });
+
+  // Promotions: changed profilo between consecutive months
+  const promoOrder = { 'CFA Junior': 1, 'CFA Senior': 2, 'CFA Private': 3 };
+  const promotions = [];
+  allNames.forEach(name => {
+    for (let i = 1; i < months.length; i++) {
+      const prev = timeline[name][months[i-1]];
+      const curr = timeline[name][months[i]];
+      if (prev && curr && prev !== curr && promoOrder[curr] > promoOrder[prev]) {
+        promotions.push({ nome: name, da: prev, a: curr, mese: months[i], mesePrev: months[i-1] });
+      }
+    }
+  });
+
+  // New entrants: appear for first time in a month
+  const newEntrants = [];
+  months.forEach((m, idx) => {
+    if (idx === 0) return;
+    const prevMonths = months.slice(0, idx);
+    byMonth[m].forEach(r => {
+      const name = cleanName(r.Consulente);
+      const wasBefore = prevMonths.some(pm => RAW.some(pr => cleanName(pr.Consulente) === name && pr.Mese === pm));
+      if (!wasBefore) newEntrants.push({ nome: name, profilo: r.Profilo, mese: m });
+    });
+  });
+
+  // Exits: present in a month but not in next (including ❌)
+  const exits = [];
+  months.forEach((m, idx) => {
+    if (idx === months.length - 1) return;
+    const nextM = months[idx + 1];
+    byMonth[m].forEach(r => {
+      const name = cleanName(r.Consulente);
+      const inNext = RAW.some(nr => cleanName(nr.Consulente) === name && nr.Mese === nextM);
+      if (!inNext || r.isOut) {
+        if (!exits.find(e => e.nome === name)) {
+          exits.push({ nome: name, profilo: r.Profilo, mese: m, isMarked: r.isOut });
+        }
+      }
+    });
+  });
+
+  // Count per category per month
+  const catCounts = {};
+  months.forEach(m => {
+    catCounts[m] = { 'CFA Junior': 0, 'CFA Senior': 0, 'CFA Private': 0 };
+    byMonth[m].forEach(r => { if (catCounts[m][r.Profilo] !== undefined) catCounts[m][r.Profilo]++; });
+  });
+
+  return { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, allNames, cleanName };
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function dChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+const CD = { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:true, labels:{color:'#8891b0',font:{family:'JetBrains Mono',size:10},boxWidth:10}}, tooltip:{backgroundColor:'#fff',titleColor:'#1a1f36',bodyColor:'#4a5280',borderColor:'#e2e7f0',borderWidth:1,padding:10} } };
+const TICK = { color:'#8891b0', font:{family:'JetBrains Mono',size:10} };
+const GRID = { color:'#f0f3fa', drawBorder:false };
+
+function badge(p) {
+  const cls = p==='CFA Junior'?'badge-junior':p==='CFA Senior'?'badge-senior':'badge-private';
+  return `<span class="badge ${cls}">${p.replace('CFA ','')}</span>`;
+}
+
+function renderAll() {
+  const { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, allNames, cleanName } = analyze();
+
+  // ── KPI SUMMARY ──
+  const lastMonth = months[months.length - 1];
+  const firstMonth = months[0];
+  const totalNow = byMonth[lastMonth].length;
+  const totalFirst = byMonth[firstMonth].length;
+  const delta = totalNow - totalFirst;
+
+  const kpiHtml = `
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Consulenti attuali</span><span class="kpi-icon">👥</span></div>
+        <div class="kpi-value">${totalNow}</div>
+        <div class="kpi-sub">${delta >= 0 ? '+' : ''}${delta} da ${MONTH_SHORT[firstMonth]||firstMonth}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Junior</span><span class="kpi-icon" style="color:#0d9e6e">●</span></div>
+        <div class="kpi-value" style="color:#0d9e6e">${catCounts[lastMonth]['CFA Junior']}</div>
+        <div class="kpi-sub">in ${MONTH_SHORT[lastMonth]||lastMonth}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Senior</span><span class="kpi-icon" style="color:#1a7fcb">●</span></div>
+        <div class="kpi-value" style="color:#1a7fcb">${catCounts[lastMonth]['CFA Senior']}</div>
+        <div class="kpi-sub">in ${MONTH_SHORT[lastMonth]||lastMonth}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Private</span><span class="kpi-icon" style="color:#7c3aed">●</span></div>
+        <div class="kpi-value" style="color:#7c3aed">${catCounts[lastMonth]['CFA Private']}</div>
+        <div class="kpi-sub">in ${MONTH_SHORT[lastMonth]||lastMonth}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Promozioni</span><span class="kpi-icon">⬆️</span></div>
+        <div class="kpi-value">${promotions.length}</div>
+        <div class="kpi-sub">nel periodo</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Nuovi entrati</span><span class="kpi-icon">🟢</span></div>
+        <div class="kpi-value">${newEntrants.length}</div>
+        <div class="kpi-sub">nel periodo</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Usciti</span><span class="kpi-icon">🔴</span></div>
+        <div class="kpi-value">${exits.length}</div>
+        <div class="kpi-sub">nel periodo</div>
+      </div>
+    </div>`;
+
+  // ── CHART: andamento categorie ──
+  const chartCatHtml = `
+    <div class="card">
+      <div class="card-title">Andamento consulenti per categoria</div>
+      <div class="chart-wrap"><canvas id="chartCat"></canvas></div>
+    </div>`;
+
+  // ── CHART: totale rete ──
+  const chartTotHtml = `
+    <div class="card">
+      <div class="card-title">Totale consulenti in rete</div>
+      <div class="chart-wrap"><canvas id="chartTot"></canvas></div>
+    </div>`;
+
+  // ── PROMOZIONI ──
+  const promoHtml = promotions.length === 0
+    ? '<div class="empty-state">Nessuna promozione rilevata nel periodo</div>'
+    : promotions.map(p => `
+        <div class="movement-item">
+          <div class="movement-name">${p.nome}</div>
+          ${badge(p.da)}
+          <span class="movement-arrow">→</span>
+          ${badge(p.a)}
+          <span class="movement-meta">${MONTH_SHORT[p.mesePrev]||p.mesePrev} → ${MONTH_SHORT[p.mese]||p.mese}</span>
+        </div>`).join('');
+
+  // ── NUOVI ENTRATI ──
+  const newHtml = newEntrants.length === 0
+    ? '<div class="empty-state">Nessun nuovo ingresso rilevato</div>'
+    : newEntrants.map(e => `
+        <div class="movement-item">
+          <div class="movement-name">${e.nome}</div>
+          ${badge(e.profilo)}
+          <span class="movement-arrow">🟢</span>
+          <span class="movement-meta">entrato a ${MONTH_SHORT[e.mese]||e.mese}</span>
+        </div>`).join('');
+
+  // ── USCITI ──
+  const outHtml = exits.length === 0
+    ? '<div class="empty-state">Nessuna uscita rilevata</div>'
+    : exits.map(e => `
+        <div class="movement-item">
+          <div class="movement-name">${e.nome}${e.isMarked ? ' ❌' : ''}</div>
+          ${badge(e.profilo)}
+          <span class="movement-arrow">🔴</span>
+          <span class="movement-meta">uscito dopo ${MONTH_SHORT[e.mese]||e.mese}</span>
+        </div>`).join('');
+
+  // ── TIMELINE COMPLETA ──
+  const promoColor = { 'CFA Junior':'cell-junior', 'CFA Senior':'cell-senior', 'CFA Private':'cell-private' };
+
+  // Sort: alphabetically, grouped by current profilo
+  const sortedNames = [...allNames].sort((a,b) => {
+    const pa = timeline[a][lastMonth] || 'ZZZ';
+    const pb = timeline[b][lastMonth] || 'ZZZ';
+    if (pa !== pb) return pa.localeCompare(pb);
+    return a.localeCompare(b);
+  });
+
+  const timelineRows = sortedNames.map(name => {
+    const cells = months.map((m, idx) => {
+      const profilo = timeline[name][m];
+      if (!profilo) return `<div class="timeline-cell cell-absent">—</div>`;
+      const prevProfilo = idx > 0 ? timeline[name][months[idx-1]] : null;
+      const isPromoted = prevProfilo && prevProfilo !== profilo;
+      const cls = promoColor[profilo] + (isPromoted ? ' cell-promoted' : '');
+      return `<div class="timeline-cell ${cls}">${profilo.replace('CFA ','')}</div>`;
+    }).join('');
+    return `<div class="timeline-row">
+      <div class="timeline-label">${name}</div>
+      <div class="timeline-months">${cells}</div>
+    </div>`;
+  }).join('');
+
+  const headerCells = months.map(m => `<div class="timeline-cell">${MONTH_SHORT[m]||m}</div>`).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div>
+      <div class="section-label">Riepilogo rete</div>
+      ${kpiHtml}
+    </div>
+
+    <div>
+      <div class="section-label">Andamento nel tempo</div>
+      <div class="two-col">
+        ${chartCatHtml}
+        ${chartTotHtml}
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Movimenti</div>
+      <div class="three-col">
+        <div class="card">
+          <div class="card-title">⬆️ Promozioni (${promotions.length})</div>
+          <div class="movement-list">${promoHtml}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🟢 Nuovi entrati (${newEntrants.length})</div>
+          <div class="movement-list">${newHtml}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔴 Usciti (${exits.length})</div>
+          <div class="movement-list">${outHtml}</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Timeline consulenti — categoria per mese</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <div style="min-width:500px">
+            <div class="timeline-row timeline-header" style="background:var(--surface2)">
+              <div class="timeline-label" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted)">Consulente</div>
+              <div class="timeline-months">${headerCells}</div>
+            </div>
+            <div class="timeline">${timelineRows}</div>
+          </div>
+        </div>
+        <div style="padding:10px 16px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);display:flex;gap:16px;align-items:center">
+          <span>↑ = promozione di categoria</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#e8f8f3"></span>Junior</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#e8f2fb"></span>Senior</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#f0ebff"></span>Private</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:var(--surface2)"></span>Non presente</span>
+        </div>
+      </div>
+    </div>`;
+
+  // Render charts after DOM is updated
+  setTimeout(() => {
+    // Chart categorie
+    dChart('chartCat');
+    charts['chartCat'] = new Chart(document.getElementById('chartCat'), {
+      type: 'line',
+      data: {
+        labels: months.map(m => MONTH_SHORT[m]||m),
+        datasets: [
+          { label:'Junior', data: months.map(m=>catCounts[m]['CFA Junior']), borderColor:'#0d9e6e', backgroundColor:'#0d9e6e22', borderWidth:2, tension:0.3, fill:true, pointRadius:5 },
+          { label:'Senior', data: months.map(m=>catCounts[m]['CFA Senior']), borderColor:'#1a7fcb', backgroundColor:'#1a7fcb22', borderWidth:2, tension:0.3, fill:true, pointRadius:5 },
+          { label:'Private', data: months.map(m=>catCounts[m]['CFA Private']), borderColor:'#7c3aed', backgroundColor:'#7c3aed22', borderWidth:2, tension:0.3, fill:true, pointRadius:5 },
+        ]
+      },
+      options: { ...CD, scales:{ x:{ticks:TICK,grid:GRID}, y:{ticks:{...TICK,stepSize:1},grid:GRID,min:0} } }
+    });
+
+    // Chart totale
+    dChart('chartTot');
+    charts['chartTot'] = new Chart(document.getElementById('chartTot'), {
+      type: 'bar',
+      data: {
+        labels: months.map(m => MONTH_SHORT[m]||m),
+        datasets: [{
+          label:'Totale consulenti',
+          data: months.map(m => byMonth[m].length),
+          backgroundColor: '#2563eb22', borderColor:'#2563eb', borderWidth:1.5, borderRadius:6
+        }]
+      },
+      options: { ...CD, plugins:{...CD.plugins, legend:{display:false}}, scales:{ x:{ticks:TICK,grid:GRID}, y:{ticks:{...TICK,stepSize:1},grid:GRID,min:0} } }
+    });
+  }, 50);
+}
+
+// ── BOOT ──────────────────────────────────────────────────────────────────────
+syncData();
+</script>
+</body>
+</html>
