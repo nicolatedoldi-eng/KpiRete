@@ -161,7 +161,7 @@ const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar', APRILE:'Apr', 
 // Consulenti già presenti nella rete prima del periodo tracciato
 // (appaiono per la prima volta nei dati ma non sono nuovi entrati)
 const ALREADY_IN_RETE = [
-  'Giuseppe Cesario',
+  'Cesario Giuseppe',
   'Harshdeep Singh',
 ];
 
@@ -296,11 +296,37 @@ function analyze() {
     });
   });
 
-  // Count per category per month
+  // For ALREADY_IN_RETE: find their profilo from first month they appear, use it for all prior months
+  const alreadyInReteProfiles = {};
+  ALREADY_IN_RETE.forEach(name => {
+    for (const m of months) {
+      const rec = RAW.find(r => cleanName(r.Consulente).toLowerCase() === name.toLowerCase() && r.Mese === m);
+      if (rec) { alreadyInReteProfiles[name] = rec.Profilo; break; }
+    }
+  });
+
+  // Count per category per month (including pre-existing consultants in months they are missing)
   const catCounts = {};
   months.forEach(m => {
     catCounts[m] = { 'CFA Junior': 0, 'CFA Senior': 0, 'CFA Private': 0 };
     byMonth[m].forEach(r => { if (catCounts[m][r.Profilo] !== undefined) catCounts[m][r.Profilo]++; });
+    // Add pre-existing consultants if they are not already in this month
+    ALREADY_IN_RETE.forEach(name => {
+      const alreadyInMonth = byMonth[m].some(r => cleanName(r.Consulente).toLowerCase() === name.toLowerCase());
+      if (!alreadyInMonth && alreadyInReteProfiles[name]) {
+        catCounts[m][alreadyInReteProfiles[name]]++;
+      }
+    });
+  });
+
+  // Total per month including pre-existing
+  const totalPerMonth = {};
+  months.forEach(m => {
+    const base = byMonth[m].length;
+    const missing = ALREADY_IN_RETE.filter(name =>
+      !byMonth[m].some(r => cleanName(r.Consulente).toLowerCase() === name.toLowerCase())
+    ).length;
+    totalPerMonth[m] = base + missing;
   });
 
   return { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, allNames, cleanName };
@@ -324,8 +350,8 @@ function renderAll() {
   // ── KPI SUMMARY ──
   const lastMonth = months[months.length - 1];
   const firstMonth = months[0];
-  const totalNow = byMonth[lastMonth].length;
-  const totalFirst = byMonth[firstMonth].length;
+  const totalNow = totalPerMonth[lastMonth];
+  const totalFirst = totalPerMonth[firstMonth];
   const delta = totalNow - totalFirst;
 
   const kpiHtml = `
@@ -462,6 +488,14 @@ function renderAll() {
       <div class="three-col">
         <div class="card">
           <div class="card-title">⬆️ Promozioni (${promotions.length})</div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <span style="padding:3px 10px;border-radius:20px;background:#e8f2fb;color:#1a7fcb;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:600">
+              Junior→Senior: ${promotions.filter(p=>p.da==='CFA Junior'&&p.a==='CFA Senior').length}
+            </span>
+            <span style="padding:3px 10px;border-radius:20px;background:#f0ebff;color:#7c3aed;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:600">
+              Senior→Private: ${promotions.filter(p=>p.da==='CFA Senior'&&p.a==='CFA Private').length}
+            </span>
+          </div>
           <div class="movement-list">${promoHtml}</div>
         </div>
         <div class="card">
@@ -522,7 +556,7 @@ function renderAll() {
         labels: months.map(m => MONTH_SHORT[m]||m),
         datasets: [{
           label:'Totale consulenti',
-          data: months.map(m => byMonth[m].length),
+          data: months.map(m => totalPerMonth[m]),
           backgroundColor: '#2563eb22', borderColor:'#2563eb', borderWidth:1.5, borderRadius:6
         }]
       },
