@@ -194,7 +194,7 @@ function parseSheetRows(rows, month) {
     const nome = (row[0] || '').toString().trim();
     const profilo = (row[1] || '').toString().trim();
     if (!nome || !profili.includes(profilo) || skip.test(nome)) continue;
-    result.push({ Consulente: nome, Profilo: profilo, Mese: month, isOut: nome.includes('❌') });
+    result.push({ Consulente: nome, Profilo: profilo, Mese: month, isOut: nome.includes('❌'), isRisk: nome.includes('⚠️') });
   }
   return result;
 }
@@ -241,7 +241,7 @@ function analyze() {
   });
 
   // All unique consultants ever seen (clean name without ❌)
-  const cleanName = n => n.replace('❌','').trim();
+  const cleanName = n => n.replace('❌','').replace('⚠️','').trim();
   const allNames = [...new Set(RAW.map(r => cleanName(r.Consulente)))];
 
   // Build timeline: for each consultant, their profilo per month
@@ -330,7 +330,20 @@ function analyze() {
     totalPerMonth[m] = base + missing;
   });
 
-  return { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, totalPerMonth, allNames, cleanName };
+  // At-risk consultants: marked with ⚠️ in any month (use latest month's data)
+  const atRiskSet = {};
+  RAW.forEach(r => {
+    if (r.isRisk) {
+      const name = cleanName(r.Consulente);
+      // Keep latest month's record
+      if (!atRiskSet[name] || months.indexOf(r.Mese) > months.indexOf(atRiskSet[name].mese)) {
+        atRiskSet[name] = { nome: name, profilo: r.Profilo, mese: r.Mese };
+      }
+    }
+  });
+  const atRisk = Object.values(atRiskSet).sort((a,b) => a.profilo.localeCompare(b.profilo) || a.nome.localeCompare(b.nome));
+
+  return { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, totalPerMonth, atRisk, allNames, cleanName };
 }
 
 // ── RENDER ────────────────────────────────────────────────────────────────────
@@ -346,7 +359,7 @@ function badge(p) {
 }
 
 function renderAll() {
-  const { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, totalPerMonth, allNames, cleanName } = analyze();
+  const { months, byMonth, timeline, promotions, newEntrants, exits, catCounts, totalPerMonth, atRisk, allNames, cleanName } = analyze();
 
   // ── KPI SUMMARY ──
   const lastMonth = months[months.length - 1];
@@ -391,6 +404,11 @@ function renderAll() {
         <div class="kpi-top"><span class="kpi-label">Usciti</span><span class="kpi-icon">🔴</span></div>
         <div class="kpi-value">${exits.length}</div>
         <div class="kpi-sub">nel periodo</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">A rischio</span><span class="kpi-icon">⚠️</span></div>
+        <div class="kpi-value" style="color:#dd6b20">${atRisk.length}</div>
+        <div class="kpi-sub">segnalati con ⚠️</div>
       </div>
     </div>`;
 
@@ -486,6 +504,22 @@ function renderAll() {
 
     <div>
       <div class="section-label">Movimenti</div>
+      <div style="margin-bottom:16px">
+        <div class="card">
+          <div class="card-title">⚠️ Consulenti a rischio uscita (${atRisk.length})</div>
+          ${atRisk.length === 0
+            ? '<div class="empty-state">Nessun consulente segnalato come a rischio</div>'
+            : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+                ${atRisk.map(r => `
+                  <div class="movement-item" style="border-left:3px solid #dd6b20">
+                    <div class="movement-name">${r.nome}</div>
+                    ${badge(r.profilo)}
+                    <span class="movement-meta" style="color:#dd6b20">⚠️ ${MONTH_SHORT[r.mese]||r.mese}</span>
+                  </div>`).join('')}
+              </div>`
+          }
+        </div>
+      </div>
       <div class="three-col">
         <div class="card">
           <div class="card-title">⬆️ Promozioni (${promotions.length})</div>
