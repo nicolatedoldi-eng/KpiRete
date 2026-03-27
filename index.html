@@ -696,26 +696,74 @@ function renderCharts() {
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
-const COLS = [
-  {key:'Consulente',label:'Consulente'},{key:'Profilo',label:'Profilo'},{key:'Mese',label:'Mese'},
+const COLS_BASE = [
+  {key:'Consulente',label:'Consulente'},{key:'Profilo',label:'Profilo'},
   {key:'perc_rinnovi',label:'% Rinnovi'},{key:'Parcella',label:'Parcella'},{key:'Parcella AP',label:'Parcella AP'},
   {key:'Incassato',label:'Incassato'},{key:'svil_interni',label:'Svil. Interni'},
   {key:'svil_esterni',label:'Svil. Esterni'},{key:'svil_totale',label:'Svil. Totale'},
 ];
 
+function getTableRows() {
+  const multi = selectedMonths.length > 1;
+  const COLS = multi
+    ? [{key:'Mesi',label:'Mesi'}, ...COLS_BASE]
+    : [{key:'Mese',label:'Mese'}, ...COLS_BASE];
+
+  let rows;
+  if (!multi) {
+    // Single month: one row per record
+    rows = filteredData.map(r => ({...r, _display: MONTH_SHORT[r.Mese]||r.Mese}));
+  } else {
+    // Multi month: aggregate by consulente
+    const grouped = {};
+    filteredData.forEach(r => {
+      const k = r.Consulente;
+      if (!grouped[k]) grouped[k] = {
+        Consulente: r.Consulente, Profilo: r.Profilo,
+        Parcella: 0, 'Parcella AP': 0, Incassato: 0,
+        svil_interni: 0, svil_esterni: 0, svil_totale: 0,
+        _mesi: []
+      };
+      grouped[k].Parcella       += r.Parcella;
+      grouped[k]['Parcella AP'] += r['Parcella AP'];
+      grouped[k].Incassato      += r.Incassato;
+      grouped[k].svil_interni   += r.svil_interni;
+      grouped[k].svil_esterni   += r.svil_esterni;
+      grouped[k].svil_totale    += r.svil_totale;
+      grouped[k]._mesi.push(MONTH_SHORT[r.Mese]||r.Mese);
+    });
+    rows = Object.values(grouped).map(r => ({
+      ...r,
+      perc_rinnovi: r['Parcella AP'] > 0 ? r.Parcella / r['Parcella AP'] : -1,
+      _display: r._mesi.join(' + ')
+    }));
+    // Apply sort on aggregated rows
+    if (sortCol) {
+      rows.sort((a, b) => {
+        let av = a[sortCol], bv = b[sortCol];
+        if (typeof av === 'string') return sortDir * (av||'').localeCompare(bv||'');
+        return sortDir * ((av||0) - (bv||0));
+      });
+    }
+  }
+  return { rows, COLS, multi };
+}
+
 function renderTable() {
+  const { rows, COLS, multi } = getTableRows();
   document.getElementById('tableHead').innerHTML = COLS.map(c =>
     `<th class="${sortCol===c.key?'sorted':''}" onclick="sortBy('${c.key}')">${c.label} ${sortCol===c.key?(sortDir===1?'↑':'↓'):''}</th>`
   ).join('');
-  const start=(page-1)*PER_PAGE;
-  const pageData=filteredData.slice(start,start+PER_PAGE);
-  document.getElementById('tableCount').textContent=filteredData.length+' righe';
-  document.getElementById('tableBody').innerHTML=!pageData.length
-    ?`<tr><td colspan="${COLS.length}" class="empty-state">Nessun dato trovato</td></tr>`
-    :pageData.map(r=>`<tr onclick="openModal('${r.Consulente.replace(/'/g,"\\'")}')">
+  const total = rows.length;
+  const start = (page-1)*PER_PAGE;
+  const pageData = rows.slice(start, start+PER_PAGE);
+  document.getElementById('tableCount').textContent = total + (multi ? ' consulenti' : ' righe');
+  document.getElementById('tableBody').innerHTML = !pageData.length
+    ? `<tr><td colspan="${COLS.length}" class="empty-state">Nessun dato trovato</td></tr>`
+    : pageData.map(r => `<tr onclick="openModal('${r.Consulente.replace(/'/g,"\\'")}')">
         <td style="font-weight:600">${r.Consulente}</td>
         <td>${profiloBadge(r.Profilo)}</td>
-        <td class="mono" style="color:var(--text2)">${MONTH_SHORT[r.Mese]||r.Mese}</td>
+        <td class="mono" style="color:var(--text2);font-size:11px">${r._display}</td>
         <td>${rinnoviPill(r.perc_rinnovi)}</td>
         <td class="${r.Parcella>0?'val-pos':'val-muted'}">${fmtK(r.Parcella)}</td>
         <td class="val-muted">${fmtK(r['Parcella AP'])}</td>
@@ -724,15 +772,15 @@ function renderTable() {
         <td class="${r.svil_esterni>0?'val-pos':'val-muted'}">${fmtK(r.svil_esterni)}</td>
         <td class="${r.svil_totale>0?'val-pos':'val-muted'}">${fmtK(r.svil_totale)}</td>
       </tr>`).join('');
-  const totalPages=Math.ceil(filteredData.length/PER_PAGE);
-  document.getElementById('pageInfo').textContent=`${start+1}–${Math.min(start+PER_PAGE,filteredData.length)} di ${filteredData.length}`;
-  document.getElementById('pageBtns').innerHTML=
+  const totalPages = Math.ceil(total/PER_PAGE);
+  document.getElementById('pageInfo').textContent = `${start+1}–${Math.min(start+PER_PAGE,total)} di ${total}`;
+  document.getElementById('pageBtns').innerHTML =
     `<button class="page-btn" onclick="goPage(${page-1})" ${page<=1?'disabled':''}>←</button>`+
     Array.from({length:totalPages},(_,i)=>i+1).filter(p=>Math.abs(p-page)<=2).map(p=>`<button class="page-btn ${p===page?'active':''}" onclick="goPage(${p})">${p}</button>`).join('')+
     `<button class="page-btn" onclick="goPage(${page+1})" ${page>=totalPages?'disabled':''}>→</button>`;
 }
 function sortBy(col) { sortDir=sortCol===col?-sortDir:1; sortCol=col; applyFilters(); }
-function goPage(p) { const t=Math.ceil(filteredData.length/PER_PAGE); if(p<1||p>t)return; page=p; renderTable(); }
+function goPage(p) { const t=Math.ceil(getTableRows().rows.length/PER_PAGE); if(p<1||p>t)return; page=p; renderTable(); }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────────
 function openModal(consulente) {
