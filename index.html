@@ -692,6 +692,7 @@ function renderCharts() {
   // Sviluppo per profilo
   dChart('chartSviluppoProfilo');
   charts['chartSviluppoProfilo'] = new Chart(document.getElementById('chartSviluppoProfilo'),{ type:'bar', data:{ labels:mesi.map(m=>MONTH_SHORT[m]), datasets:profili.map((p,i)=>({ label:p.replace('CFA ',''), data:mesi.map(m=>filteredData.filter(r=>r.Mese===m&&r.Profilo===p).reduce((s,r)=>s+r.svil_totale,0)), backgroundColor:['#0d9e6e33','#1a7fcb33','#7c3aed33'][i], borderColor:['#0d9e6e','#1a7fcb','#7c3aed'][i], borderWidth:1.5,borderRadius:3 })) }, options:{...CD,plugins:{...CD.plugins,legend:{display:true,labels:{color:'#8891b0',font:{family:'JetBrains Mono',size:10},boxWidth:10}}},scales:{x:{ticks:TICK,grid:GRID},y:{ticks:{...TICK,callback:v=>fmtK(v)},grid:GRID}}} });
+
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
