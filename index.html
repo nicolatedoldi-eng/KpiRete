@@ -271,6 +271,8 @@ tbody td { padding: 10px 14px; font-size: 12px; white-space: nowrap; }
       <div class="chart-card"><div class="chart-title">Sviluppo mensile — Interni vs Esterni</div><div class="chart-wrap"><canvas id="chartSviluppoTrend"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">% Rinnovi mensile per profilo (media)</div><div class="chart-wrap"><canvas id="chartRinnovi"></canvas></div></div>
       <div class="chart-card"><div class="chart-title">Sviluppo totale per profilo e mese</div><div class="chart-wrap"><canvas id="chartSviluppoProfilo"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Top % Rinnovi — parcella ≥ €2.000</div><div class="chart-wrap"><canvas id="chartTopRinnoviTrim"></canvas></div></div>
+      <div class="chart-card"><div class="chart-title">Top crescita Sviluppo Esterni</div><div class="chart-wrap"><canvas id="chartTopSvilTrim"></canvas></div></div>
     </div>
   </div>
   <div>
@@ -692,6 +694,78 @@ function renderCharts() {
   // Sviluppo per profilo
   dChart('chartSviluppoProfilo');
   charts['chartSviluppoProfilo'] = new Chart(document.getElementById('chartSviluppoProfilo'),{ type:'bar', data:{ labels:mesi.map(m=>MONTH_SHORT[m]), datasets:profili.map((p,i)=>({ label:p.replace('CFA ',''), data:mesi.map(m=>filteredData.filter(r=>r.Mese===m&&r.Profilo===p).reduce((s,r)=>s+r.svil_totale,0)), backgroundColor:['#0d9e6e33','#1a7fcb33','#7c3aed33'][i], borderColor:['#0d9e6e','#1a7fcb','#7c3aed'][i], borderWidth:1.5,borderRadius:3 })) }, options:{...CD,plugins:{...CD.plugins,legend:{display:true,labels:{color:'#8891b0',font:{family:'JetBrains Mono',size:10},boxWidth:10}}},scales:{x:{ticks:TICK,grid:GRID},y:{ticks:{...TICK,callback:v=>fmtK(v)},grid:GRID}}} });
+
+  // ── Top Rinnovi trimestre (parcella >= 2000) ──
+  const byConsRinn = {};
+  filteredData.forEach(r => {
+    const name = r.Consulente;
+    if (!byConsRinn[name]) byConsRinn[name] = { parc: 0, parcAP: 0, profilo: r.Profilo };
+    byConsRinn[name].parc   += r.Parcella;
+    byConsRinn[name].parcAP += r['Parcella AP'];
+  });
+  const topRinnovi = Object.entries(byConsRinn)
+    .filter(([, v]) => v.parc >= 2000 && v.parcAP > 0)
+    .map(([nome, v]) => ({ nome, pct: v.parc / v.parcAP, profilo: v.profilo }))
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 10);
+  const profiloCol = { 'CFA Junior':'#0d9e6e', 'CFA Senior':'#1a7fcb', 'CFA Private':'#7c3aed' };
+
+  dChart('chartTopRinnoviTrim');
+  charts['chartTopRinnoviTrim'] = new Chart(document.getElementById('chartTopRinnoviTrim'), {
+    type: 'bar',
+    data: {
+      labels: topRinnovi.map(x => getCognome(x.nome)),
+      datasets: [{
+        data: topRinnovi.map(x => +(x.pct * 100).toFixed(1)),
+        backgroundColor: topRinnovi.map(x => profiloCol[x.profilo] + '33'),
+        borderColor:     topRinnovi.map(x => profiloCol[x.profilo]),
+        borderWidth: 1.5, borderRadius: 4
+      }]
+    },
+    options: { ...CD,
+      plugins: { ...CD.plugins, legend:{display:false},
+        tooltip: { ...CD.plugins.tooltip, callbacks: { label: ctx => ctx.parsed.y.toFixed(1) + '%' } }
+      },
+      scales: {
+        x: { ticks: TICK, grid: GRID },
+        y: { ticks: { ...TICK, callback: v => v + '%' }, grid: GRID, min: 0 }
+      }
+    }
+  });
+
+  // ── Top Sviluppo Esterni trimestre ──
+  const byConsSvilEst = {};
+  filteredData.forEach(r => {
+    const name = r.Consulente;
+    if (!byConsSvilEst[name]) byConsSvilEst[name] = { svil: 0, profilo: r.Profilo };
+    byConsSvilEst[name].svil += r.svil_esterni;
+  });
+  const topSvilEst = Object.entries(byConsSvilEst)
+    .filter(([, v]) => v.svil > 0)
+    .map(([nome, v]) => ({ nome, svil: v.svil, profilo: v.profilo }))
+    .sort((a, b) => b.svil - a.svil)
+    .slice(0, 10);
+
+  dChart('chartTopSvilTrim');
+  charts['chartTopSvilTrim'] = new Chart(document.getElementById('chartTopSvilTrim'), {
+    type: 'bar',
+    data: {
+      labels: topSvilEst.map(x => getCognome(x.nome)),
+      datasets: [{
+        data: topSvilEst.map(x => x.svil),
+        backgroundColor: topSvilEst.map(x => profiloCol[x.profilo] + '33'),
+        borderColor:     topSvilEst.map(x => profiloCol[x.profilo]),
+        borderWidth: 1.5, borderRadius: 4
+      }]
+    },
+    options: { ...CD,
+      plugins: { ...CD.plugins, legend:{display:false} },
+      scales: {
+        x: { ticks: TICK, grid: GRID },
+        y: { ticks: { ...TICK, callback: v => fmtK(v) }, grid: GRID, min: 0 }
+      }
+    }
+  });
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────────
