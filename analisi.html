@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPI Rete — Analisi</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f6fb; --surface: #ffffff; --surface2: #f0f3fa;
+  --border: #e2e7f0; --border2: #d0d7e8;
+  --text: #1a1f36; --text2: #4a5280; --muted: #8891b0;
+  --junior: #0d9e6e; --junior-bg: #e8f8f3;
+  --senior: #1a7fcb; --senior-bg: #e8f2fb;
+  --private: #7c3aed; --private-bg: #f0ebff;
+  --green: #0d9e6e; --red: #e53e3e; --orange: #dd6b20;
+  --accent: #2563eb;
+  --shadow: 0 1px 3px rgba(26,31,54,0.07), 0 4px 12px rgba(26,31,54,0.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Sora', sans-serif; font-size: 13px; min-height: 100vh; }
+
+.loading-screen { position: fixed; inset: 0; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; gap: 16px; }
+.loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+.loading-error { background: #fff5f5; border: 1px solid #fed7d7; border-radius: 10px; padding: 20px 28px; text-align: center; max-width: 420px; }
+.loading-error h3 { color: var(--red); margin-bottom: 8px; }
+.loading-error p { color: var(--text2); font-size: 12px; line-height: 1.6; }
+.retry-btn { margin-top: 14px; background: var(--accent); color: #fff; border: none; padding: 8px 20px; border-radius: 7px; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+.header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 32px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 1px 4px rgba(26,31,54,0.06); }
+.logo { font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+.logo span { color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.last-sync { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+.nav-pill { padding: 6px 14px; border-radius: 7px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); font-family: 'Sora', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; transition: all 0.12s; }
+.nav-pill:hover { border-color: var(--accent); color: var(--accent); }
+.nav-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sync-btn { display: flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 7px; font-family: 'Sora', sans-serif; font-weight: 600; font-size: 12px; cursor: pointer; }
+.sync-btn:hover { background: #1d4ed8; }
+.sync-btn:disabled { opacity: 0.6; cursor: default; }
+.sync-btn.syncing svg { animation: spin 0.8s linear infinite; }
+
+.main { padding: 24px 32px; display: flex; flex-direction: column; gap: 24px; max-width: 1100px; }
+.section-label { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+/* Report header */
+.report-header { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px 28px; box-shadow: var(--shadow); display: flex; justify-content: space-between; align-items: flex-start; }
+.report-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+.report-subtitle { font-size: 13px; color: var(--muted); }
+.report-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; text-align: right; }
+.report-badge-val { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; }
+.report-badge-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+@media (max-width: 800px) { .summary-grid { grid-template-columns: repeat(2,1fr); } }
+.sum-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+.sum-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+.sum-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; margin-bottom: 4px; }
+.sum-sub { font-size: 11px; color: var(--muted); }
+.sum-bar { margin-top: 10px; }
+.sum-bar-track { background: var(--surface2); border-radius: 99px; height: 5px; overflow: hidden; }
+.sum-bar-fill { height: 100%; border-radius: 99px; }
+.sum-bar-label { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; font-family: 'JetBrains Mono', monospace; }
+
+/* Category blocks */
+.cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 800px) { .cat-grid { grid-template-columns: 1fr; } }
+.cat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+.cat-title { font-size: 13px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.cat-dot { width: 10px; height: 10px; border-radius: 50%; }
+.cat-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.cat-row:last-child { border-bottom: none; }
+.cat-row-label { color: var(--text2); }
+.cat-row-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.status-ok { color: var(--green); }
+.status-warn { color: var(--orange); }
+.status-bad { color: var(--red); }
+
+/* Tables */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .two-col { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: var(--shadow); }
+.card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 14px; }
+.rank-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rank-table th { text-align: left; padding: 7px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--surface2); }
+.rank-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.rank-table tr:last-child td { border-bottom: none; }
+.rank-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); width: 24px; }
+.rank-medal { font-size: 14px; width: 24px; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge-junior { background: var(--junior-bg); color: var(--junior); }
+.badge-senior { background: var(--senior-bg); color: var(--senior); }
+.badge-private { background: var(--private-bg); color: var(--private); }
+
+/* Alert box */
+.alert-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 16px 20px; }
+.alert-box-red { background: #fff5f5; border-color: #feb2b2; }
+.alert-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--orange); margin-bottom: 10px; }
+.alert-title-red { color: var(--red); }
+.alert-list { display: flex; flex-direction: column; gap: 6px; }
+.alert-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.alert-name { font-weight: 600; flex: 1; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text" id="loadingText">Caricamento dati...</div>
+</div>
+
+<div id="appContent" style="display:none">
+
+<div class="header">
+  <div class="logo">KPI <span>Rete</span> Consulenti</div>
+  <div class="header-right">
+    <div class="last-sync" id="lastSync"></div>
+    <div style="display:flex;gap:4px">
+      <a href="index.html" class="nav-pill">📊 KPI</a>
+      <a href="rete.html" class="nav-pill">📈 Rete</a>
+      <a href="analisi.html" class="nav-pill active">🔍 Analisi</a>
+    </div>
+    <button class="sync-btn" id="syncBtn" onclick="syncData()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"></path>
+      </svg>
+      Aggiorna
+    </button>
+  </div>
+</div>
+
+<div class="main" id="mainContent"></div>
+
+</div>
+
+<script>
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx1-t9ohLfwkecMoU73JbtvusFAqsbmm99kxIxaRI9XZYjmOsTRISxqFWf1lNpjHFJD/exec';
+const SHEET_NAMES = ['GENNAIO', 'FEBBRAIO', 'MARZO', 'APRILE'];
+const MONTH_SHORT = { GENNAIO:'Gen', FEBBRAIO:'Feb', MARZO:'Mar', APRILE:'Apr' };
+const TARGETS = { 'CFA Junior': 0.50, 'CFA Senior': 0.75, 'CFA Private': 0.95, Rete: 0.85 };
+const SVIL_EST_TARGET_MENSILE = 62818;
+
+let RAW = [];
+
+// ── FETCH ─────────────────────────────────────────────────────────────────────
+async function fetchSheet(sheetName) {
+  const url = `${APPS_SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`;
+  let resp;
+  try { resp = await fetch(url); } catch(e) { throw new Error(`Fetch fallito: ${e.message}`); }
+  if (!resp.ok) throw new Error(`HTTP ${resp.status} per "${sheetName}"`);
+  let rows;
+  try { rows = await resp.json(); } catch(e) { throw new Error(`JSON non valido`); }
+  return rows.map(row => row.map(cell => (cell === null || cell === undefined) ? '' : String(cell)));
+}
+
+function parseSheetRows(rows, month) {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    if (rows[i][0] && rows[i][0].toString().trim() === 'Consulente') { headerIdx = i; break; }
+  }
+  if (headerIdx < 0) return [];
+  const headers = rows[headerIdx].map(h => (h||'').toString().trim());
+  const ci = name => headers.indexOf(name);
+  const iParc    = ci('Parcella');
+  const iParcAP  = ci('Parcella AP');
+  const iInc     = ci('Incassato');
+  const iNCI     = ci('Nuovi clienti interni');
+  const iSvilEst = ci('TOTALE SVILUPPO ESTERNI');
+  const iSvilTot = ci('TOTALE SVILUPPO');
+  const n = v => { if (!v||v===''||v==='#DIV/0!') return 0; const x=parseFloat(v.toString().replace(/[^\d.\-]/g,'')); return isNaN(x)?0:x; };
+  const profili = ['CFA Junior','CFA Senior','CFA Private'];
+  const skip = /junior|senior|private|totale|media|budget|target|benchmark|actual/i;
+  const result = [];
+  for (let i = headerIdx+1; i < rows.length; i++) {
+    const row = rows[i];
+    const nome = (row[0]||'').toString().trim();
+    const profilo = (row[1]||'').toString().trim();
+    if (!nome || !profili.includes(profilo) || skip.test(nome)) continue;
+    result.push({
+      Consulente: nome, Profilo: profilo, Mese: month,
+      isOut:  nome.includes('❌'), isRisk: nome.includes('⚠️'),
+      Parcella:      iParc    >= 0 ? n(row[iParc])    : 0,
+      'Parcella AP': iParcAP  >= 0 ? n(row[iParcAP])  : 0,
+      Incassato:     iInc     >= 0 ? n(row[iInc])     : 0,
+      svil_interni:  iNCI     >= 0 ? n(row[iNCI])     : 0,
+      svil_esterni:  iSvilEst >= 0 ? n(row[iSvilEst]) : 0,
+      svil_totale:   iSvilTot >= 0 ? n(row[iSvilTot]) : 0,
+    });
+  }
+  return result;
+}
+
+async function syncData() {
+  const btn = document.getElementById('syncBtn');
+  const lt  = document.getElementById('loadingText');
+  btn.disabled = true; btn.classList.add('syncing');
+  try {
+    const all = [];
+    for (const month of SHEET_NAMES) {
+      if (lt) lt.textContent = `Caricamento ${month}...`;
+      const rows = await fetchSheet(month);
+      all.push(...parseSheetRows(rows, month));
+    }
+    if (!all.length) throw new Error('Nessun dato trovato.');
+    RAW = all;
+    const now = new Date();
+    document.getElementById('lastSync').textContent = `↑ ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('appContent').style.display = 'block';
+    renderReport();
+  } catch(err) {
+    document.getElementById('loadingScreen').innerHTML = `
+      <div class="loading-error"><h3>Errore</h3>
+      <p style="font-family:monospace;background:#fee;padding:8px;border-radius:4px;font-size:11px">${err.message}</p>
+      <button class="retry-btn" onclick="syncData()">Riprova</button></div>`;
+  }
+  btn.disabled = false; btn.classList.remove('syncing');
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const fmtK = v => {
+  if (!v || v === 0) return '—';
+  const abs = Math.abs(v);
+  const s = abs >= 1000 ? (abs/1000).toFixed(1)+'k' : abs.toFixed(0);
+  return (v < 0 ? '-€' : '€') + s;
+};
+const fmtPct = v => v !== null && v >= 0 ? (v*100).toFixed(1)+'%' : '—';
+const fmtEur = v => v === 0 ? '—' : (v < 0 ? '-€' : '€') + Math.abs(v).toLocaleString('it-IT', {minimumFractionDigits:0, maximumFractionDigits:0});
+const statusClass = (v, target) => v >= target ? 'status-ok' : v >= target*0.8 ? 'status-warn' : 'status-bad';
+const statusIcon  = (v, target) => v >= target ? '✅' : v >= target*0.8 ? '⚠️' : '❌';
+const cleanName   = n => n.replace('❌','').replace('⚠️','').trim();
+const badge = p => {
+  const cls = p==='CFA Junior'?'badge-junior':p==='CFA Senior'?'badge-senior':'badge-private';
+  return `<span class="badge ${cls}">${p.replace('CFA ','')}</span>`;
+};
+const medals = ['🥇','🥈','🥉','4.','5.','6.','7.','8.','9.','10.'];
+
+// ── AGGREGATE ─────────────────────────────────────────────────────────────────
+function aggregate(data) {
+  const grouped = {};
+  data.forEach(r => {
+    const k = cleanName(r.Consulente);
+    if (!grouped[k]) grouped[k] = {
+      Consulente: k, Profilo: r.Profilo,
+      Parcella: 0, 'Parcella AP': 0, Incassato: 0,
+      svil_interni: 0, svil_esterni: 0, svil_totale: 0,
+      isRisk: false, isOut: false, mesi: []
+    };
+    grouped[k].Parcella       += r.Parcella;
+    grouped[k]['Parcella AP'] += r['Parcella AP'];
+    grouped[k].Incassato      += r.Incassato;
+    grouped[k].svil_interni   += r.svil_interni;
+    grouped[k].svil_esterni   += r.svil_esterni;
+    grouped[k].svil_totale    += r.svil_totale;
+    if (r.isRisk) grouped[k].isRisk = true;
+    if (r.isOut)  grouped[k].isOut  = true;
+    grouped[k].mesi.push(r.Mese);
+  });
+  return Object.values(grouped).map(r => ({
+    ...r,
+    perc_rinnovi: r['Parcella AP'] > 0 ? r.Parcella / r['Parcella AP'] : null
+  }));
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderReport() {
+  const months = [...new Set(RAW.map(r => r.Mese))];
+  const nMesi  = months.length;
+  const periodLabel = months.map(m => MONTH_SHORT[m]||m).join(' — ');
+
+  const agg = aggregate(RAW);
+  const profili = ['CFA Junior','CFA Senior','CFA Private'];
+  const colori  = { 'CFA Junior':'#0d9e6e', 'CFA Senior':'#1a7fcb', 'CFA Private':'#7c3aed' };
+
+  // Totali rete
+  const totParc    = agg.reduce((s,r)=>s+r.Parcella, 0);
+  const totParcAP  = agg.reduce((s,r)=>s+r['Parcella AP'], 0);
+  const totInc     = agg.reduce((s,r)=>s+r.Incassato, 0);
+  const totSvilEst = agg.reduce((s,r)=>s+r.svil_esterni, 0);
+  const totSvilTot = agg.reduce((s,r)=>s+r.svil_totale, 0);
+  const rinnRete   = totParcAP > 0 ? totParc/totParcAP : 0;
+  const targetSvilEst = SVIL_EST_TARGET_MENSILE * nMesi;
+  const nConsulenti = agg.length;
+
+  // Summary cards
+  const summaryHtml = `
+    <div class="summary-grid">
+      <div class="sum-card">
+        <div class="sum-label">Consulenti</div>
+        <div class="sum-value">${nConsulenti}</div>
+        <div class="sum-sub">${months.map(m=>MONTH_SHORT[m]).join(', ')}</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">% Rinnovi Rete</div>
+        <div class="sum-value" style="color:${rinnRete>=TARGETS.Rete?'var(--green)':rinnRete>=TARGETS.Rete*0.8?'var(--orange)':'var(--red)'}">${fmtPct(rinnRete)}</div>
+        <div class="sum-bar">
+          <div class="sum-bar-track"><div class="sum-bar-fill" style="width:${Math.min(rinnRete/TARGETS.Rete,1.3)*100/1.3}%;background:${rinnRete>=TARGETS.Rete?'var(--green)':'var(--orange)'}"></div></div>
+          <div class="sum-bar-label"><span>Target 85%</span><span style="color:${rinnRete>=TARGETS.Rete?'var(--green)':'var(--orange)'}">${statusIcon(rinnRete,TARGETS.Rete)}</span></div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Sviluppo Esterni</div>
+        <div class="sum-value" style="color:${totSvilEst>=targetSvilEst?'var(--green)':'var(--orange)'}">${fmtK(totSvilEst)}</div>
+        <div class="sum-bar">
+          <div class="sum-bar-track"><div class="sum-bar-fill" style="width:${Math.min(totSvilEst/targetSvilEst,1.3)*100/1.3}%;background:${totSvilEst>=targetSvilEst?'var(--green)':'var(--orange)'}"></div></div>
+          <div class="sum-bar-label"><span>Target ${fmtK(targetSvilEst)}</span><span>${statusIcon(totSvilEst,targetSvilEst)} ${(totSvilEst/targetSvilEst*100).toFixed(0)}%</span></div>
+        </div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-label">Parcelle emesse</div>
+        <div class="sum-value">${fmtK(totParc)}</div>
+        <div class="sum-sub">AP: ${fmtK(totParcAP)} · Inc: ${fmtK(totInc)}</div>
+      </div>
+    </div>`;
+
+  // Per categoria
+  const catHtml = profili.map(p => {
+    const sub = agg.filter(r=>r.Profilo===p);
+    const parc  = sub.reduce((s,r)=>s+r.Parcella,0);
+    const parcAP= sub.reduce((s,r)=>s+r['Parcella AP'],0);
+    const sEst  = sub.reduce((s,r)=>s+r.svil_esterni,0);
+    const sTot  = sub.reduce((s,r)=>s+r.svil_totale,0);
+    const rinn  = parcAP>0 ? parc/parcAP : 0;
+    const t     = TARGETS[p];
+    const inattivi = sub.filter(r=>r.Parcella===0&&r.svil_totale===0).length;
+    return `<div class="cat-card">
+      <div class="cat-title">
+        <div class="cat-dot" style="background:${colori[p]}"></div>
+        <span>${p}</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400">${sub.length} consulenti</span>
+      </div>
+      <div class="cat-row"><span class="cat-row-label">% Rinnovi</span>
+        <span class="cat-row-val ${statusClass(rinn,t)}">${fmtPct(rinn)} ${statusIcon(rinn,t)} <small style="font-weight:400;color:var(--muted)">(target ${(t*100).toFixed(0)}%)</small></span></div>
+      <div class="cat-row"><span class="cat-row-label">Parcelle</span><span class="cat-row-val">${fmtK(parc)}</span></div>
+      <div class="cat-row"><span class="cat-row-label">Parcelle AP</span><span class="cat-row-val" style="color:var(--muted)">${fmtK(parcAP)}</span></div>
+      <div class="cat-row"><span class="cat-row-label">Svil. Esterni</span><span class="cat-row-val">${fmtK(sEst)}</span></div>
+      <div class="cat-row"><span class="cat-row-label">Svil. Totale</span><span class="cat-row-val">${fmtK(sTot)}</span></div>
+      <div class="cat-row"><span class="cat-row-label">Inattivi</span>
+        <span class="cat-row-val ${inattivi>0?'status-warn':''}">${inattivi} ${inattivi>0?'⚠️':''}</span></div>
+    </div>`;
+  }).join('');
+
+  // Top rinnovi (parcella >= 2000)
+  const topRinn = agg
+    .filter(r => r.Parcella >= 2000 && r.perc_rinnovi !== null)
+    .sort((a,b) => b.perc_rinnovi - a.perc_rinnovi)
+    .slice(0, 8);
+  const topRinnHtml = topRinn.map((r,i) => `<tr>
+    <td class="rank-medal">${medals[i]}</td>
+    <td style="font-weight:600">${r.Consulente}</td>
+    <td>${badge(r.Profilo)}</td>
+    <td class="mono ${statusClass(r.perc_rinnovi, TARGETS[r.Profilo])}">${fmtPct(r.perc_rinnovi)}</td>
+    <td class="mono" style="color:var(--text2)">${fmtK(r.Parcella)}</td>
+  </tr>`).join('');
+
+  // Bottom rinnovi (parcella >= 2000, sotto target)
+  const botRinn = agg
+    .filter(r => r.Parcella >= 2000 && r.perc_rinnovi !== null && r.perc_rinnovi < TARGETS[r.Profilo])
+    .sort((a,b) => a.perc_rinnovi - b.perc_rinnovi)
+    .slice(0, 8);
+  const botRinnHtml = botRinn.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted)">Tutti sopra target 🎉</td></tr>'
+    : botRinn.map((r,i) => `<tr>
+        <td class="rank-medal">${i+1}.</td>
+        <td style="font-weight:600">${r.Consulente}</td>
+        <td>${badge(r.Profilo)}</td>
+        <td class="mono status-bad">${fmtPct(r.perc_rinnovi)} <small style="color:var(--muted)">(target ${(TARGETS[r.Profilo]*100).toFixed(0)}%)</small></td>
+        <td class="mono" style="color:var(--text2)">${fmtK(r.Parcella)}</td>
+      </tr>`).join('');
+
+  // Top sviluppo esterni
+  const topSvil = agg.filter(r=>r.svil_esterni>0).sort((a,b)=>b.svil_esterni-a.svil_esterni).slice(0,8);
+  const topSvilHtml = topSvil.map((r,i) => `<tr>
+    <td class="rank-medal">${medals[i]}</td>
+    <td style="font-weight:600">${r.Consulente}</td>
+    <td>${badge(r.Profilo)}</td>
+    <td class="mono status-ok">${fmtK(r.svil_esterni)}</td>
+    <td class="mono" style="color:var(--text2)">${fmtK(r.svil_totale)}</td>
+  </tr>`).join('');
+
+  // Inattivi
+  const inattivi = agg.filter(r=>r.Parcella===0&&r.svil_totale===0&&!r.isOut);
+  const inativiHtml = inattivi.length === 0
+    ? '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Nessun consulente inattivo 🎉</div>'
+    : inattivi.map(r=>`<div class="alert-item">${badge(r.Profilo)}<span class="alert-name">${r.Consulente}</span></div>`).join('');
+
+  // A rischio
+  const aRischio = agg.filter(r=>r.isRisk);
+  const aRischioHtml = aRischio.length === 0
+    ? '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">Nessun consulente segnalato</div>'
+    : aRischio.map(r=>`<div class="alert-item">${badge(r.Profilo)}<span class="alert-name">${r.Consulente}</span><span style="color:var(--orange);font-family:JetBrains Mono,monospace;font-size:11px">${fmtPct(r.perc_rinnovi)}</span></div>`).join('');
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="report-header">
+      <div>
+        <div class="report-title">Analisi Rete — ${periodLabel}</div>
+        <div class="report-subtitle">Aggiornata in tempo reale dal Google Sheet · ${nConsulenti} consulenti · ${nMesi} mes${nMesi===1?'e':'i'}</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div class="report-badge">
+          <div class="report-badge-val" style="color:${rinnRete>=TARGETS.Rete?'var(--green)':'var(--orange)'}">${fmtPct(rinnRete)}</div>
+          <div class="report-badge-label">% Rinnovi rete</div>
+        </div>
+        <div class="report-badge">
+          <div class="report-badge-val" style="color:${totSvilEst>=targetSvilEst?'var(--green)':'var(--orange)'}">${(totSvilEst/targetSvilEst*100).toFixed(0)}%</div>
+          <div class="report-badge-label">vs target sviluppo</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Riepilogo periodo</div>
+      ${summaryHtml}
+    </div>
+
+    <div>
+      <div class="section-label">Dettaglio per categoria</div>
+      <div class="cat-grid">${catHtml}</div>
+    </div>
+
+    <div>
+      <div class="section-label">Ranking consulenti</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">🏆 Top % Rinnovi <small style="font-weight:400">(parcella ≥ €2.000)</small></div>
+          <table class="rank-table">
+            <thead><tr><th></th><th>Consulente</th><th>Cat.</th><th>% Rinnovi</th><th>Parcella</th></tr></thead>
+            <tbody>${topRinnHtml}</tbody>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">⚠️ Sotto target rinnovi <small style="font-weight:400">(parcella ≥ €2.000)</small></div>
+          <table class="rank-table">
+            <thead><tr><th></th><th>Consulente</th><th>Cat.</th><th>% Rinnovi</th><th>Parcella</th></tr></thead>
+            <tbody>${botRinnHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Sviluppo Esterni</div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">🚀 Top Sviluppo Esterni</div>
+          <table class="rank-table">
+            <thead><tr><th></th><th>Consulente</th><th>Cat.</th><th>Svil. Esterni</th><th>Svil. Totale</th></tr></thead>
+            <tbody>${topSvilHtml}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="alert-box alert-box-red">
+            <div class="alert-title alert-title-red">🔴 Consulenti inattivi (${inattivi.length}) — 0 parcelle e 0 sviluppo</div>
+            <div class="alert-list">${inativiHtml}</div>
+          </div>
+          <div class="alert-box">
+            <div class="alert-title">⚠️ Consulenti a rischio (${aRischio.length})</div>
+            <div class="alert-list">${aRischioHtml}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+syncData();
+</script>
+</body>
+</html>
