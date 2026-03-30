@@ -331,7 +331,10 @@ function renderReport() {
     const sTot  = sub.reduce((s,r)=>s+r.svil_totale,0);
     const rinn  = parcAP>0 ? parc/parcAP : 0;
     const t     = TARGETS[p];
-    const inattivi = sub.filter(r=>r.Parcella===0&&r.svil_totale===0).length;
+    const _lastM = months[months.length-1];
+    const _inGen  = new Set([...RAW.filter(r=>r.Mese==='GENNAIO').map(r=>cleanName(r.Consulente)),...['Cesario Giuseppe','Harshdeep Singh','Marco Giusfredi']]);
+    const _inLast = new Set(RAW.filter(r=>r.Mese===_lastM).map(r=>cleanName(r.Consulente)));
+    const inattivi = sub.filter(r=>r.Parcella===0&&r.svil_totale===0&&!r.isOut&&_inGen.has(r.Consulente)&&_inLast.has(r.Consulente)).length;
     return `<div class="cat-card">
       <div class="cat-title">
         <div class="cat-dot" style="background:${colori[p]}"></div>
