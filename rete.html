@@ -323,13 +323,17 @@ function analyze() {
   // Total per month including pre-existing
   const totalPerMonth = {};
   const lastMonthForCount = months[months.length - 1];
-  const inLastMonthNames = new Set(byMonth[lastMonthForCount].map(r => cleanName(r.Consulente)));
+  const inLastMonthNames = new Set(byMonth[lastMonthForCount]
+    .filter(r => !r.isOut)
+    .map(r => cleanName(r.Consulente)));
   months.forEach(m => {
     // Exclude: ❌ espliciti + chi non compare nell'ultimo mese (usciti silenziosamente)
     const base = byMonth[m].filter(r =>
       !r.isOut && inLastMonthNames.has(cleanName(r.Consulente))
     ).length;
+    // Per ALREADY_IN_RETE: aggiungili solo se sono ancora presenti nell'ultimo mese
     const missing = ALREADY_IN_RETE.filter(name =>
+      inLastMonthNames.has(name) &&
       !byMonth[m].some(r => cleanName(r.Consulente).toLowerCase() === name.toLowerCase())
     ).length;
     totalPerMonth[m] = base + missing;
