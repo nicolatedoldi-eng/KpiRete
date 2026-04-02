@@ -306,15 +306,25 @@ function analyze() {
     }
   });
 
+  // Build set of active consultants in last month (excludes ❌ and silent exits)
+  const lastMonthForCount = months[months.length - 1];
+  const inLastMonthNames = new Set(byMonth[lastMonthForCount]
+    .filter(r => !r.isOut)
+    .map(r => cleanName(r.Consulente)));
+
   // Count per category per month (including pre-existing consultants in months they are missing)
   const catCounts = {};
   months.forEach(m => {
     catCounts[m] = { 'CFA Junior': 0, 'CFA Senior': 0, 'CFA Private': 0 };
-    byMonth[m].forEach(r => { if (catCounts[m][r.Profilo] !== undefined) catCounts[m][r.Profilo]++; });
-    // Add pre-existing consultants if they are not already in this month
+    // Only count non-exited consultants who are still in last month
+    byMonth[m].forEach(r => {
+      if (!r.isOut && inLastMonthNames.has(cleanName(r.Consulente)) && catCounts[m][r.Profilo] !== undefined)
+        catCounts[m][r.Profilo]++;
+    });
+    // Add pre-existing consultants if missing from this month AND still in last month
     ALREADY_IN_RETE.forEach(name => {
       const alreadyInMonth = byMonth[m].some(r => cleanName(r.Consulente).toLowerCase() === name.toLowerCase());
-      if (!alreadyInMonth && alreadyInReteProfiles[name]) {
+      if (!alreadyInMonth && alreadyInReteProfiles[name] && inLastMonthNames.has(name)) {
         catCounts[m][alreadyInReteProfiles[name]]++;
       }
     });
@@ -322,10 +332,6 @@ function analyze() {
 
   // Total per month including pre-existing
   const totalPerMonth = {};
-  const lastMonthForCount = months[months.length - 1];
-  const inLastMonthNames = new Set(byMonth[lastMonthForCount]
-    .filter(r => !r.isOut)
-    .map(r => cleanName(r.Consulente)));
   months.forEach(m => {
     // Exclude: ❌ espliciti + chi non compare nell'ultimo mese (usciti silenziosamente)
     const base = byMonth[m].filter(r =>
