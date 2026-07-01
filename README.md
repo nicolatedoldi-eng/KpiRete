@@ -1,2 +1,0 @@
-# KpiRete
-KPI Dashboard
