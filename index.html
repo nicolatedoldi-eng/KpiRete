@@ -566,7 +566,7 @@ function renderKPI() {
   const totalIncassato= filteredData.reduce((s,r) => s + r.Incassato, 0);
   const totalParcAP   = filteredData.reduce((s,r) => s + r['Parcella AP'], 0);
   const rinnovi = totalParcAP > 0 ? totalParcella / totalParcAP : null;
-  const consulenti = new Set(filteredData.map(r => r.Consulente)).size;
+  const consulenti = new Set(filteredData.map(r => r.Consulente.replace('❌','').replace('⚠️','').trim())).size;
   const nMesiSel = selectedMonths.length;
   const targetSvilEstScalato = SVIL_EST_TARGET.totale * nMesiSel;
 
