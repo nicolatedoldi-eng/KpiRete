@@ -345,12 +345,13 @@ function analyze() {
     totalPerMonth[m] = base + missing;
   });
 
-  // At-risk consultants: marked with ⚠️ in any month (use latest month's data)
+  // Consulenti a rischio: solo ⚠️ dal file, esclusi quelli non più considerati a rischio
+  const ESCLUDI_DA_RISCHIO = ['Gioele Bellingeri', 'Bellingeri Gioele', 'Cesario Giuseppe', 'Giuseppe Cesario'];
   const atRiskSet = {};
   RAW.forEach(r => {
     if (r.isRisk) {
       const name = cleanName(r.Consulente);
-      // Keep latest month's record
+      if (ESCLUDI_DA_RISCHIO.some(e => e.toLowerCase() === name.toLowerCase())) return;
       if (!atRiskSet[name] || months.indexOf(r.Mese) > months.indexOf(atRiskSet[name].mese)) {
         atRiskSet[name] = { nome: name, profilo: r.Profilo, mese: r.Mese };
       }
