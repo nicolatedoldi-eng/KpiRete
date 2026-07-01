@@ -604,6 +604,7 @@ function renderGauges() {
 
   document.getElementById('gaugeGrid').innerHTML = profili.map(profilo => {
     const target = TARGETS[profilo];
+    const col = colori[profilo];
     const rows = mesi.map(m => {
       const sub = filteredData.filter(r => r.Mese===m && r.Profilo===profilo && r.perc_rinnovi>=0);
       if (!sub.length) return null;
@@ -611,14 +612,45 @@ function renderGauges() {
       return { mese:m, avg: sap>0 ? sp/sap : null };
     }).filter(Boolean);
 
-    const rowsHtml = rows.map(row => {
+    const maxVal = Math.max(...rows.map(r=>r.avg||0), target * 1.3);
+    const barAreaH = 120; // px height of bar area
+    const targetPct = Math.min(target / maxVal, 1) * 100;
+
+    const barsHtml = rows.map(row => {
       if (!row.avg) return '';
-      const w = Math.min(row.avg, 2)/2*100, tw = target/2*100;
-      const col = barColor(row.avg, target);
-      return `<div class="gauge-row"><span class="gauge-name">${MONTH_SHORT[row.mese]}</span><div class="gauge-track"><div class="gauge-fill" style="width:${w}%;background:${col}"></div><div class="target-line" style="left:${tw}%"></div></div><span class="gauge-pct" style="color:${col}">${(row.avg*100).toFixed(1)}%</span></div>`;
+      const h = Math.min(row.avg / maxVal, 1) * 100;
+      const barCol = barColor(row.avg, target);
+      return `
+        <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${barCol};margin-bottom:3px">${(row.avg*100).toFixed(0)}%</span>
+          <div style="flex:1;width:100%;display:flex;align-items:flex-end;position:relative;height:${barAreaH}px">
+            <div style="width:100%;height:${h}%;background:${barCol};border-radius:4px 4px 0 0;transition:height 0.5s;min-height:3px"></div>
+          </div>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px">${MONTH_SHORT[row.mese]}</span>
+        </div>`;
     }).join('');
 
-    return `<div class="gauge-card"><div class="gauge-card-title" style="color:${colori[profilo]}">${profilo} — target ${(target*100).toFixed(0)}%</div>${rowsHtml||'<div style="color:var(--muted);font-size:11px">Nessun dato disponibile</div>'}<div class="gauge-legend"><div class="gauge-legend-item"><div class="legend-dot" style="background:#0d9e6e"></div><span>≥ target</span></div><div class="gauge-legend-item"><div class="legend-dot" style="background:#d69e2e"></div><span>80–100%</span></div><div class="gauge-legend-item"><div class="legend-dot" style="background:#e53e3e"></div><span>&lt; 80%</span></div><div class="gauge-legend-item" style="margin-left:auto"><div style="width:10px;height:2px;background:rgba(26,31,54,0.3)"></div><span>target</span></div></div></div>`;
+    const targetLineHtml = rows.length ? `
+      <div style="position:absolute;bottom:${targetPct}%;left:0;right:0;height:2px;background:rgba(26,31,54,0.25);border-radius:1px;z-index:1">
+        <span style="position:absolute;right:0;top:-14px;font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--muted)">target ${(target*100).toFixed(0)}%</span>
+      </div>` : '';
+
+    return `<div class="gauge-card">
+      <div class="gauge-card-title" style="color:${col}">${profilo} — target ${(target*100).toFixed(0)}%</div>
+      ${rows.length ? `
+        <div style="position:relative">
+          <div style="display:flex;gap:6px;align-items:flex-end;height:${barAreaH+30}px;padding-top:20px;position:relative">
+            ${targetLineHtml}
+            ${barsHtml}
+          </div>
+        </div>` : '<div style="color:var(--muted);font-size:11px">Nessun dato disponibile</div>'}
+      <div class="gauge-legend" style="margin-top:8px">
+        <div class="gauge-legend-item"><div class="legend-dot" style="background:#0d9e6e"></div><span>≥ target</span></div>
+        <div class="gauge-legend-item"><div class="legend-dot" style="background:#d69e2e"></div><span>80–100%</span></div>
+        <div class="gauge-legend-item"><div class="legend-dot" style="background:#e53e3e"></div><span>&lt; 80%</span></div>
+        <div class="gauge-legend-item" style="margin-left:auto"><div style="width:10px;height:2px;background:rgba(26,31,54,0.3)"></div><span>target</span></div>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -715,12 +747,13 @@ function getTableRows() {
     // Single month: one row per record
     rows = filteredData.map(r => ({...r, _display: MONTH_SHORT[r.Mese]||r.Mese}));
   } else {
-    // Multi month: aggregate by consulente
+    // Multi month: aggregate by consulente (usa nome pulito come chiave per evitare duplicati con ⚠️ o ❌)
+    const cleanKey = n => n.replace('❌','').replace('⚠️','').trim();
     const grouped = {};
     filteredData.forEach(r => {
-      const k = r.Consulente;
+      const k = cleanKey(r.Consulente);
       if (!grouped[k]) grouped[k] = {
-        Consulente: r.Consulente, Profilo: r.Profilo,
+        Consulente: k, Profilo: r.Profilo,
         Parcella: 0, 'Parcella AP': 0, Incassato: 0,
         svil_interni: 0, svil_esterni: 0, svil_totale: 0,
         _mesi: []
